@@ -170,12 +170,114 @@ int main(int argc, char** argv){
   }
 
   std::cout << "Total measurement groups: " << metaRoot["Measurements"].size() << std::endl;
-
+  std::cout << "Total individual measurement groups: " << metaRoot["IndividualMeasurements"].size() << std::endl;
   // Store measurementNumProperty and measurementPopulationDescription items to be added
   //   to the document in a separate iteration over the individual measurement items.
   // Store empty Json::Value if not applicable
   std::vector<Json::Value> measurementNumProperties, measurementPopulationDescriptions;
   std::vector<Json::Value> measurementGroupAlgorithmIdentification;
+
+  for(Json::ArrayIndex i=0;i<metaRoot["IndividualMeasurements"].size();i++){
+    Json::Value measurementGroup = metaRoot["IndividualMeasurements"][i];
+
+    CHECK_COND(report.addIndividualMeasurements());
+    /* fill individual measurements with data */
+    TID1500_MeasurementReport::TID1501_Measurements &measurements = report.getIndividualMeasurements();
+    //std::cout << measurementGroup["TrackingIdentifier"] << std::endl;
+    CHECK_COND(measurements.setTrackingIdentifier(measurementGroup["TrackingIdentifier"].asCString()));
+
+    if(metaRoot.isMember("activitySession"))
+      CHECK_COND(measurements.setActivitySession(metaRoot["activitySession"].asCString()));
+    if(metaRoot.isMember("timePoint"))
+      CHECK_COND(measurements.setTimePoint(metaRoot["timePoint"].asCString()));
+
+    if(measurementGroup.isMember("TrackingUniqueIdentifier")) {
+      CHECK_COND(measurements.setTrackingUniqueIdentifier(measurementGroup["TrackingUniqueIdentifier"].asCString()));
+    } else {
+      char uid[100];
+      dcmGenerateUniqueIdentifier(uid, QIICR_INSTANCE_UID_ROOT);
+      CHECK_COND(measurements.setTrackingUniqueIdentifier(uid));
+    }
+
+    CHECK_COND(measurements.setFinding(json2cev(measurementGroup["Finding"])));
+    if(measurementGroup.isMember("FindingSite")){
+      if(measurementGroup.isMember("Laterality")){
+        CHECK_COND(measurements.addFindingSite(json2cev(measurementGroup["FindingSite"]),
+                                               json2cev(measurementGroup["Laterality"])));
+      } else {
+        CHECK_COND(measurements.addFindingSite(json2cev(measurementGroup["FindingSite"])));
+      }
+    }
+
+    if(measurementGroup.isMember("MeasurementMethod"))
+      CHECK_COND(measurements.setMeasurementMethod(json2cev(measurementGroup["MeasurementMethod"])));
+
+    if(measurementGroup.isMember("measurementAlgorithmIdentification")){
+      measurementGroupAlgorithmIdentification.push_back(measurementGroup["measurementAlgorithmIdentification"]);
+    } else {
+      measurementGroupAlgorithmIdentification.push_back(Json::Value());
+    }
+
+    // TODO - handle conditional items!
+    for(Json::ArrayIndex j=0;j<measurementGroup["measurementItems"].size();j++){
+      Json::Value measurement = measurementGroup["measurementItems"][j];
+      // TODO - add measurement method and derivation!
+      const CMR_TID300_in_TID1501_in_TID1500::MeasurementValue numValue(measurement["value"].asCString(), json2cev(measurement["units"]));
+
+      if(!measurements.addMeasurement(json2cev(measurement["quantity"]), numValue).good()){
+        std::cerr << "WARNING: Skipping measurement with the value of " << measurement["value"].asCString() << std::endl;
+        continue;
+      }
+
+      if(measurement.isMember("derivationModifier")){
+          CHECK_COND(measurements.getMeasurement().setDerivation(json2cev(measurement["derivationModifier"])));
+      }
+
+      if(measurement.isMember("measurementModifiers"))
+        for(Json::ArrayIndex k=0;k<measurement["measurementModifiers"].size();k++)
+          CHECK_COND(measurements.getMeasurement().addModifier(json2cev(measurement["measurementModifiers"][k]["modifier"]),json2cev(measurement["measurementModifiers"][k]["modifierValue"])));
+
+      if(measurement.isMember("measurementDerivationParameters")){
+        for(Json::ArrayIndex k=0;k<measurement["measurementDerivationParameters"].size();k++){
+          Json::Value derivationItem = measurement["measurementDerivationParameters"][k];
+          DSRCodedEntryValue derivationParameter =
+            json2cev(measurement["measurementDerivationParameters"][k]["derivationParameter"]);
+
+          CMR_SRNumericMeasurementValue derivationParameterValue =
+            CMR_SRNumericMeasurementValue(derivationItem["derivationParameterValue"].asCString(),
+            json2cev(derivationItem["derivationParameterUnits"]));
+
+          CHECK_COND(measurements.getMeasurement().addDerivationParameter(json2cev(derivationItem["derivationParameter"]), derivationParameterValue));
+        }
+      }
+
+      if(measurement.isMember("measurementNumProperties")){
+        measurementNumProperties.push_back(measurement["measurementNumProperties"]);
+      } else {
+        measurementNumProperties.push_back(Json::Value());
+      }
+
+      if(measurement.isMember("measurementPopulationDescription")){
+        measurementPopulationDescriptions.push_back(measurement["measurementPopulationDescription"]);
+      } else {
+        measurementPopulationDescriptions.push_back(Json::Value());
+      }
+
+      if(measurement.isMember("measurementAlgorithmIdentification")){
+        // TODO: add constraints to the schema - name and version both required if group is present!
+        //TID4019_AlgorithmIdentification &measurementAlgorithm = measurements.getMeasurement().getAlgorithmIdentification();
+        //measurementAlgorithm.setIdentification(measurement["measurementAlgorithmIdentification"]["AlgorithmName"].asCString(),
+        //                                       measurement["measurementAlgorithmIdentification"]["AlgorithmVersion"].asCString());
+        //if(measurement["measurementAlgorithmIdentification"].isMember("AlgorithmParameters")){
+        //  Json::Value parametersJSON = measurement["measurementAlgorithmIdentification"]["AlgorithmParameters"];
+        //  for(Json::ArrayIndex parameterId=0;parameterId<parametersJSON.size();parameterId++)
+        //    CHECK_COND(measurementAlgorithm.addParameter(parametersJSON[parameterId].asCString()));
+        }
+      }
+
+
+    }
+
 
   for(Json::ArrayIndex i=0;i<metaRoot["Measurements"].size();i++){
     Json::Value measurementGroup = metaRoot["Measurements"][i];
