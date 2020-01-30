@@ -201,12 +201,16 @@ int main(int argc, char** argv){
 
     CHECK_COND(measurements.setFinding(json2cev(measurementGroup["Finding"])));
     if(measurementGroup.isMember("FindingSite")){
-      if(measurementGroup.isMember("Laterality")){
-        CHECK_COND(measurements.addFindingSite(json2cev(measurementGroup["FindingSite"]),
-                                               json2cev(measurementGroup["Laterality"])));
-      } else {
-        CHECK_COND(measurements.addFindingSite(json2cev(measurementGroup["FindingSite"])));
+      std::cout << "Found " << measurementGroup["FindingSite"].size() << " finding sites" << std::endl;
+      for ( Json::ArrayIndex j=0;j<measurementGroup["FindingSite"].size();j++){
+        if(measurementGroup.isMember("Laterality")){
+          CHECK_COND(measurements.addFindingSite(json2cev(measurementGroup["FindingSite"][j]),
+                                                 json2cev(measurementGroup["Laterality"][j])));
+        } else {
+          CHECK_COND(measurements.addFindingSite(json2cev(measurementGroup["FindingSite"][j])));
+        }
       }
+
     }
 
     if(measurementGroup.isMember("MeasurementMethod"))
@@ -263,16 +267,6 @@ int main(int argc, char** argv){
         measurementPopulationDescriptions.push_back(Json::Value());
       }
 
-      if(measurement.isMember("measurementAlgorithmIdentification")){
-        // TODO: add constraints to the schema - name and version both required if group is present!
-        //TID4019_AlgorithmIdentification &measurementAlgorithm = measurements.getMeasurement().getAlgorithmIdentification();
-        //measurementAlgorithm.setIdentification(measurement["measurementAlgorithmIdentification"]["AlgorithmName"].asCString(),
-        //                                       measurement["measurementAlgorithmIdentification"]["AlgorithmVersion"].asCString());
-        //if(measurement["measurementAlgorithmIdentification"].isMember("AlgorithmParameters")){
-        //  Json::Value parametersJSON = measurement["measurementAlgorithmIdentification"]["AlgorithmParameters"];
-        //  for(Json::ArrayIndex parameterId=0;parameterId<parametersJSON.size();parameterId++)
-        //    CHECK_COND(measurementAlgorithm.addParameter(parametersJSON[parameterId].asCString()));
-        }
       }
 
 
